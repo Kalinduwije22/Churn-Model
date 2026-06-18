@@ -1,0 +1,27 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Virtual environment ---
+.venv/
+venv/
+
+# --- Generated data & artifacts (recreate with: python make.py all) ---
+data/*.csv
+models/*.joblib
+models/*.json
+
+# --- MLflow ---
+mlflow.db
+mlruns/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Docker build context leftovers ---
+*.tar.gz
