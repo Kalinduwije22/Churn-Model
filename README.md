@@ -7,7 +7,7 @@ An end-to-end machine-learning service that predicts whether a bank customer is 
 
 > Hosted on Azure Container Apps with scale-to-zero. The first request after an idle period takes a few seconds while the container wakes up (a cold start) — this is the trade-off that keeps it running at near-zero cost.
 
-![Churn risk web interface]("E:\churn-mlops\Screenshot 2026-06-18 140606.png")
+![Churn risk web interface]("Screenshot 2026-06-18 140606.png")
 
 ---
 
