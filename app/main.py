@@ -22,12 +22,14 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 from app.schema import Customer, Prediction
 from src.features import engineer
 
 MODEL_PATH = Path("models/churn_pipeline.joblib")
 META_PATH = Path("models/model_meta.json")
+INDEX_HTML = Path(__file__).parent / "templates" / "index.html"
 
 app = FastAPI(
     title="Bank Churn Prediction API",
@@ -77,8 +79,13 @@ def health() -> dict:
     return {"status": "ok", "model_loaded": _model is not None}
 
 
-@app.get("/")
-def root() -> dict:
+@app.get("/", response_class=HTMLResponse)
+def home() -> HTMLResponse:
+    return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"))
+
+
+@app.get("/info")
+def info() -> dict:
     return {
         "service": "bank-churn-api",
         "model_version": _version,

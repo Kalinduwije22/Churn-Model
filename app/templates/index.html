@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Churn Risk · Retail Banking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --canvas:#E9EDF1;
+    --surface:#FFFFFF;
+    --ink:#13202C;
+    --muted:#5D6B79;
+    --hair:#D3DBE2;
+    --teal:#1F6F78;
+    --teal-deep:#16545B;
+    --low:#2E7D5B;
+    --mid:#C98A1B;
+    --high:#C0392B;
+    --shadow:0 1px 2px rgba(19,32,44,.06),0 8px 28px rgba(19,32,44,.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--canvas);
+    color:var(--ink);
+    font-family:"Inter",system-ui,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:32px 20px 56px;
+  }
+  .wrap{max-width:1000px;margin:0 auto;}
+
+  /* header */
+  header{display:flex;align-items:center;justify-content:space-between;
+    gap:16px;margin-bottom:26px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:baseline;gap:12px;}
+  .eyebrow{font-family:"Space Mono",monospace;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--teal);}
+  h1{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:23px;
+    margin:0;letter-spacing:-.01em;}
+  .status{display:flex;align-items:center;gap:8px;font-family:"Space Mono",monospace;
+    font-size:11px;color:var(--muted);letter-spacing:.04em;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);
+    box-shadow:0 0 0 3px rgba(93,107,121,.15);}
+  .dot.ok{background:var(--low);box-shadow:0 0 0 3px rgba(46,125,91,.18);}
+  .dot.bad{background:var(--high);box-shadow:0 0 0 3px rgba(192,57,43,.18);}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1.15fr 1fr;gap:18px;}
+  @media(max-width:760px){.grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border:1px solid var(--hair);
+    border-radius:14px;box-shadow:var(--shadow);padding:22px 22px 24px;}
+  .card h2{font-family:"Space Grotesk",sans-serif;font-size:13px;font-weight:600;
+    letter-spacing:.02em;margin:0 0 18px;display:flex;align-items:center;gap:9px;}
+  .card h2 .num{font-family:"Space Mono",monospace;font-size:11px;color:var(--teal);
+    border:1px solid var(--hair);border-radius:6px;padding:2px 7px;}
+
+  /* form */
+  .field{margin-bottom:16px;}
+  label.lbl{display:block;font-size:12px;font-weight:500;color:var(--muted);
+    margin-bottom:6px;letter-spacing:.01em;}
+  .val{font-family:"Space Mono",monospace;color:var(--ink);font-weight:700;}
+  input[type=range]{width:100%;-webkit-appearance:none;height:4px;border-radius:4px;
+    background:var(--hair);outline:none;margin-top:4px;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;
+    border-radius:50%;background:var(--teal);cursor:pointer;border:2px solid #fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:var(--teal);cursor:pointer;border:2px solid #fff;}
+  input[type=number],select{width:100%;padding:9px 11px;border:1px solid var(--hair);
+    border-radius:9px;font-family:"Inter",sans-serif;font-size:14px;color:var(--ink);
+    background:#fff;outline:none;transition:border-color .15s,box-shadow .15s;}
+  input[type=number]:focus,select:focus{border-color:var(--teal);
+    box-shadow:0 0 0 3px rgba(31,111,120,.14);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+
+  /* segmented + toggles */
+  .seg{display:flex;border:1px solid var(--hair);border-radius:9px;overflow:hidden;}
+  .seg button{flex:1;border:0;background:#fff;padding:9px;font-family:"Inter";
+    font-size:13px;color:var(--muted);cursor:pointer;transition:.15s;}
+  .seg button[aria-pressed=true]{background:var(--teal);color:#fff;}
+  .toggles{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+  .tog{display:flex;align-items:center;justify-content:space-between;
+    font-size:13px;color:var(--ink);}
+  .switch{position:relative;width:42px;height:24px;flex:none;}
+  .switch input{opacity:0;width:0;height:0;}
+  .track{position:absolute;inset:0;background:var(--hair);border-radius:24px;
+    transition:.18s;cursor:pointer;}
+  .track::before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;
+    background:#fff;border-radius:50%;transition:.18s;box-shadow:0 1px 2px rgba(0,0,0,.25);}
+  .switch input:checked + .track{background:var(--teal);}
+  .switch input:checked + .track::before{transform:translateX(18px);}
+  .switch input:focus-visible + .track{box-shadow:0 0 0 3px rgba(31,111,120,.3);}
+
+  /* CTA */
+  .cta{width:100%;margin-top:6px;padding:13px;border:0;border-radius:10px;
+    background:var(--teal);color:#fff;font-family:"Space Grotesk",sans-serif;
+    font-weight:600;font-size:14px;letter-spacing:.01em;cursor:pointer;
+    transition:background .15s,transform .05s;}
+  .cta:hover{background:var(--teal-deep);}
+  .cta:active{transform:translateY(1px);}
+  .cta:disabled{opacity:.65;cursor:default;}
+
+  /* result */
+  .result{display:flex;flex-direction:column;height:100%;}
+  .empty{color:var(--muted);font-size:13.5px;border:1px dashed var(--hair);
+    border-radius:10px;padding:22px;text-align:center;margin-top:4px;}
+  .prob{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:54px;
+    line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+  .prob small{font-size:22px;color:var(--muted);font-weight:500;margin-left:2px;}
+  .verdict{font-family:"Space Mono",monospace;font-size:12px;letter-spacing:.06em;
+    text-transform:uppercase;margin-top:4px;color:var(--muted);}
+
+  /* gauge */
+  .gauge{margin:22px 0 6px;}
+  .track-g{position:relative;height:12px;border-radius:8px;
+    background:linear-gradient(90deg,var(--low) 0%,var(--mid) 55%,var(--high) 100%);}
+  .needle{position:absolute;top:-6px;width:3px;height:24px;border-radius:3px;
+    background:var(--ink);left:0%;transform:translateX(-50%);
+    transition:left .6s cubic-bezier(.4,1.3,.5,1);box-shadow:0 0 0 3px #fff;}
+  .scale{display:flex;justify-content:space-between;font-family:"Space Mono",monospace;
+    font-size:10px;color:var(--muted);margin-top:8px;letter-spacing:.04em;}
+
+  .band{display:inline-flex;align-items:center;gap:8px;font-family:"Space Grotesk";
+    font-weight:600;font-size:13px;padding:7px 13px;border-radius:8px;margin-top:14px;}
+  .band .pip{width:9px;height:9px;border-radius:50%;}
+  .band.low{background:rgba(46,125,91,.12);color:var(--low);}
+  .band.low .pip{background:var(--low);}
+  .band.medium{background:rgba(201,138,27,.14);color:#9a6a12;}
+  .band.medium .pip{background:var(--mid);}
+  .band.high{background:rgba(192,57,43,.12);color:var(--high);}
+  .band.high .pip{background:var(--high);}
+
+  .advice{font-size:13px;color:var(--muted);margin-top:14px;
+    border-top:1px solid var(--hair);padding-top:14px;}
+  .err{font-size:13px;color:var(--high);background:rgba(192,57,43,.08);
+    border:1px solid rgba(192,57,43,.25);border-radius:9px;padding:12px;margin-top:4px;}
+
+  footer{margin-top:24px;font-family:"Space Mono",monospace;font-size:10.5px;
+    color:var(--muted);letter-spacing:.04em;text-align:center;}
+  footer a{color:var(--teal);text-decoration:none;}
+
+  @media(prefers-reduced-motion:reduce){.needle{transition:none;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div>
+        <div class="eyebrow">Retention Analytics</div>
+        <h1>Customer Churn Risk</h1>
+      </div>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">checking service…</span></div>
+  </header>
+
+  <div class="grid">
+    <!-- INPUT -->
+    <div class="card">
+      <h2><span class="num">01</span> Customer profile</h2>
+
+      <div class="row2">
+        <div class="field">
+          <label class="lbl">Credit score · <span class="val" id="csv">650</span></label>
+          <input type="range" id="CreditScore" min="300" max="900" value="650" />
+        </div>
+        <div class="field">
+          <label class="lbl">Age · <span class="val" id="agev">42</span></label>
+          <input type="range" id="Age" min="18" max="92" value="42" />
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label class="lbl">Tenure · <span class="val" id="tenv">3</span> yrs</label>
+          <input type="range" id="Tenure" min="0" max="10" value="3" />
+        </div>
+        <div class="field">
+          <label class="lbl">Products held</label>
+          <select id="NumOfProducts">
+            <option>1</option><option>2</option><option>3</option><option>4</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label class="lbl">Account balance</label>
+          <input type="number" id="Balance" value="125000" min="0" step="1000" />
+        </div>
+        <div class="field">
+          <label class="lbl">Estimated salary</label>
+          <input type="number" id="EstimatedSalary" value="90000" min="0" step="1000" />
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label class="lbl">Geography</label>
+          <select id="Geography"><option>France</option><option>Germany</option><option>Spain</option></select>
+        </div>
+        <div class="field">
+          <label class="lbl">Gender</label>
+          <div class="seg" id="genderSeg">
+            <button type="button" data-v="Male" aria-pressed="true">Male</button>
+            <button type="button" data-v="Female" aria-pressed="false">Female</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="toggles">
+        <div class="tog"><span>Holds a credit card</span>
+          <label class="switch"><input type="checkbox" id="HasCrCard" checked /><span class="track"></span></label></div>
+        <div class="tog"><span>Active member</span>
+          <label class="switch"><input type="checkbox" id="IsActiveMember" /><span class="track"></span></label></div>
+      </div>
+
+      <button class="cta" id="run">Assess churn risk</button>
+    </div>
+
+    <!-- RESULT -->
+    <div class="card">
+      <h2><span class="num">02</span> Risk assessment</h2>
+      <div class="result" id="result">
+        <div class="empty">Enter a customer's details and run an assessment to see their churn risk.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    FastAPI + XGBoost on Azure Container Apps · <a href="/docs">API docs</a>
+  </footer>
+</div>
+
+<script>
+  // live slider readouts
+  const bind=(id,out)=>{const e=document.getElementById(id),o=document.getElementById(out);
+    e.addEventListener('input',()=>o.textContent=e.value);};
+  bind('CreditScore','csv');bind('Age','agev');bind('Tenure','tenv');
+
+  // gender segmented control
+  let gender="Male";
+  document.querySelectorAll('#genderSeg button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('#genderSeg button').forEach(x=>x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');gender=b.dataset.v;}));
+
+  // health check on load
+  (async()=>{
+    const dot=document.getElementById('dot'),txt=document.getElementById('statusText');
+    try{const r=await fetch('/health');const j=await r.json();
+      if(j.model_loaded){dot.className='dot ok';txt.textContent='service online';}
+      else{dot.className='dot bad';txt.textContent='model not loaded';}}
+    catch(e){dot.className='dot bad';txt.textContent='service unreachable';}
+  })();
+
+  const result=document.getElementById('result');
+  const btn=document.getElementById('run');
+
+  btn.addEventListener('click',async()=>{
+    const payload={
+      CreditScore:+document.getElementById('CreditScore').value,
+      Geography:document.getElementById('Geography').value,
+      Gender:gender,
+      Age:+document.getElementById('Age').value,
+      Tenure:+document.getElementById('Tenure').value,
+      Balance:+document.getElementById('Balance').value,
+      NumOfProducts:+document.getElementById('NumOfProducts').value,
+      HasCrCard:document.getElementById('HasCrCard').checked?1:0,
+      IsActiveMember:document.getElementById('IsActiveMember').checked?1:0,
+      EstimatedSalary:+document.getElementById('EstimatedSalary').value
+    };
+    btn.disabled=true;btn.textContent='Scoring…';
+    result.innerHTML='<div class="empty">Scoring — waking the service if it was idle. This can take a few seconds.</div>';
+    try{
+      const r=await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!r.ok){const t=await r.text();throw new Error(r.status+' · '+t);}
+      const d=await r.json();render(d);
+    }catch(e){
+      result.innerHTML='<div class="err">Couldn\'t score this customer. The service may be waking up — try again in a few seconds.<br><br>'+e.message+'</div>';
+    }finally{btn.disabled=false;btn.textContent='Assess churn risk';}
+  });
+
+  function render(d){
+    const pct=(d.churn_probability*100).toFixed(1);
+    const band=d.risk_band;
+    const verdict=d.churn_prediction===1?'Likely to churn':'Likely to stay';
+    const advice={
+      high:'High risk. Prioritise a retention offer or outreach for this customer.',
+      medium:'Moderate risk. Worth monitoring; a light-touch check-in may help.',
+      low:'Low risk. This customer looks stable — no action needed.'
+    }[band];
+    result.innerHTML=
+      '<div><span class="prob">'+pct+'<small>%</small></span></div>'+
+      '<div class="verdict">'+verdict+'</div>'+
+      '<div class="gauge"><div class="track-g"><div class="needle" id="nd"></div></div>'+
+      '<div class="scale"><span>0 · Loyal</span><span>50</span><span>100 · Churn</span></div></div>'+
+      '<div class="band '+band+'"><span class="pip"></span>'+band.toUpperCase()+' RISK</div>'+
+      '<div class="advice">'+advice+'</div>';
+    requestAnimationFrame(()=>{document.getElementById('nd').style.left=pct+'%';});
+  }
+</script>
+</body>
+</html>

@@ -74,6 +74,29 @@ churn-mlops/
 
 ---
 
+## Web interface
+
+The API **serves its own web UI** at the root URL (`/`) — open your deployed
+API link in a browser and you get a styled churn-risk form, not JSON. It's a
+single HTML/CSS/JS page (`app/templates/index.html`) served by FastAPI; the
+page calls `/predict` on the same origin, so there's nothing separate to deploy.
+
+- `GET /`     → the web interface
+- `GET /docs` → interactive API docs
+- `GET /info` → service info as JSON
+
+After changing the UI or API, roll the new version into your live app (keeps the
+same URL):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\update-api.ps1
+```
+
+A separate Streamlit version also exists under `frontend/` as an alternative,
+but the built-in UI above is the simplest — one container, one URL.
+
+---
+
 ## Run locally first (always debug locally before touching the cloud)
 
 **On Windows (or anywhere `make` gives trouble) — use the Python task runner:**
