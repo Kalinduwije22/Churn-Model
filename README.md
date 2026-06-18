@@ -1,241 +1,135 @@
-# Bank Churn — MLOps + Azure Deployment
+# Bank Customer Churn — MLOps on Azure
 
-A small, honest end-to-end MLOps project: train a churn model, wrap it in an API,
-containerize it, and deploy it to **Azure Container Apps** on the free tier with a
-public URL. The point of the project is the *deployment*, not the model — the model
-is the payload that proves the pipeline works.
+An end-to-end machine-learning service that predicts whether a bank customer is about to leave — **trained, containerised, and deployed live on Microsoft Azure** with a public web interface. The point of the project is not the model alone, but shipping it the way models are shipped in production: reproducible training, a containerised API, train/serve parity, and a real cloud deployment that scales to zero.
 
-This uses a **bank-customer** churn dataset (deliberately different from a telco
-churn project) so it reads as a distinct portfolio entry.
+### Live demo
+**https://churn-api.ambitiousbush-353c72ac.southeastasia.azurecontainerapps.io/**
 
----
+> Hosted on Azure Container Apps with scale-to-zero. The first request after an idle period takes a few seconds while the container wakes up (a cold start) — this is the trade-off that keeps it running at near-zero cost.
 
-## What it demonstrates (the interview-relevant bits)
-
-- **Train/serve parity** — training and serving import the *same* `src/features.py`.
-  This is the single discipline that prevents train/serve skew. Say this in interviews.
-- **Pipeline packaging** — preprocessing lives *inside* the sklearn Pipeline, so the
-  container can't drift from training preprocessing.
-- **Experiment tracking** — metrics, params, and the model are logged to **MLflow**.
-- **Containerized serving** — **FastAPI + Docker**, lean serving image for fast cold starts.
-- **Cloud deployment with scale-to-zero** — Container Apps scales to 0 replicas when
-  idle, so a low-traffic demo costs essentially nothing.
+![Churn risk web interface]("E:\churn-mlops\Screenshot 2026-06-18 140606.png")
 
 ---
+
+## What it does
+
+Enter a customer's profile — credit score, age, balance, products held, activity, and so on — and the service returns the **probability that they will churn**, a **low / medium / high risk band**, and a suggested action. A bank would use this to target retention offers at customers who are actually at risk.
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Model | XGBoost (gradient-boosted trees) in a scikit-learn pipeline |
+| Tracking | MLflow (metrics, parameters, model versioning) |
+| Serving | FastAPI + Uvicorn |
+| Web UI | HTML / CSS / vanilla JS, served by the API itself |
+| Packaging | Docker |
+| Cloud | Azure Container Apps + Azure Container Registry |
 
 ## Architecture
 
-```
- train (offline)                          serve (online, in the container)
- ───────────────                          ────────────────────────────────
- bank_churn.csv                           HTTP request (customer JSON)
-      │                                          │
-      ▼                                          ▼
- src/features.engineer()  ◄── SAME CODE ──►  src/features.engineer()
-      │                                          │
-      ▼                                          ▼
- sklearn Pipeline (scale+encode → XGBoost)   model.predict_proba()
-      │                                          │
-      ▼                                          ▼
- models/churn_pipeline.joblib  ───baked into──►  Docker image
-      │                                          │
-      ▼                                          ▼
- MLflow (metrics/params)                     churn probability + risk band
-```
-
-Deployed shape on Azure:
-
-```
- Local repo ──az acr build──► Azure Container Registry ──► Container Apps
-                                                              │
-                                                  public HTTPS URL  /predict
-                                                  (min replicas = 0, scale-to-zero)
+```mermaid
+flowchart LR
+    subgraph Train["Offline - training"]
+        A[bank_churn data] --> B[features.engineer]
+        B --> C[sklearn pipeline<br/>scale + encode + XGBoost]
+        C --> D[(churn_pipeline.joblib)]
+        C --> M[MLflow tracking]
+    end
+    subgraph Serve["Online - Azure Container Apps"]
+        U[Web UI /] --> API[FastAPI /predict]
+        B2[features.engineer] --> API
+        D --> API
+        API --> R[probability + risk band]
+    end
+    D -. baked into .-> IMG[Docker image]
+    IMG --> ACR[Azure Container Registry]
+    ACR --> Serve
 ```
 
----
+The key design rule: **training and serving import the same feature-engineering module** (`src/features.py`). Because the identical transformation runs in both places, the model can never be fed differently-shaped inputs in production than it saw in training — this prevents *train/serve skew*, one of the most common silent causes of models that pass testing but fail live.
 
-## Project layout
+## Model performance
+
+| Metric | Value | Meaning |
+|--------|-------|---------|
+| ROC-AUC | 0.76 | Ranks a random churner above a random non-churner 76% of the time |
+| Recall (churn) | 0.67 | Catches about two-thirds of customers who actually churn |
+| Precision (churn) | 0.39 | Of those flagged, ~39% truly churn — acceptable for retention outreach |
+
+Class imbalance (~20% churn) is handled by up-weighting the minority class, trading some precision for higher recall — the right call when missing a churner is the costly error. The model is trained on a synthetic dataset with the same schema as the public bank-churn dataset, so swapping in real data changes nothing downstream.
+
+## API endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | Web interface (the form) |
+| `GET /docs` | Interactive Swagger API docs |
+| `GET /health` | Liveness check + whether the model is loaded |
+| `POST /predict` | One customer to churn probability + risk band |
+| `POST /predict/batch` | Score a list of customers |
+
+## Project structure
 
 ```
 churn-mlops/
-├── data/generate_data.py     synthetic bank-churn dataset (no download needed)
 ├── src/
-│   ├── features.py           SINGLE SOURCE OF TRUTH for feature engineering
-│   └── train.py              train → evaluate → MLflow → save joblib artifact
+│   ├── features.py        single source of truth for feature engineering
+│   └── train.py           train -> evaluate -> MLflow -> save artifact
 ├── app/
-│   ├── main.py               FastAPI service (/health, /predict, /predict/batch)
-│   └── schema.py             Pydantic request/response contracts
-├── models/                   trained artifact + metadata (created by train.py)
-├── Dockerfile                lean serving image
-├── requirements.txt          training deps
-├── requirements-serve.txt    serving deps (lighter)
-└── deploy/deploy.sh          one-shot Azure deployment
+│   ├── main.py            FastAPI service (serves the web UI + endpoints)
+│   ├── schema.py          request/response validation
+│   └── templates/index.html   the web interface
+├── data/generate_data.py  synthetic dataset generator
+├── deploy/                Azure deploy + update scripts (PowerShell & bash)
+├── Dockerfile             lean serving image
+├── make.py                cross-platform task runner (no make needed)
+└── requirements*.txt
 ```
 
----
+## Run locally
 
-## Web interface
+```bash
+python make.py all      # create venv + generate data + train the model
+python make.py serve    # run the API + web UI on http://localhost:8000
+```
 
-The API **serves its own web UI** at the root URL (`/`) — open your deployed
-API link in a browser and you get a styled churn-risk form, not JSON. It's a
-single HTML/CSS/JS page (`app/templates/index.html`) served by FastAPI; the
-page calls `/predict` on the same origin, so there's nothing separate to deploy.
+Then open `http://localhost:8000/` in a browser. (`make.py` is a pure-Python task runner, so it works the same on Windows, macOS, and Linux.)
 
-- `GET /`     → the web interface
-- `GET /docs` → interactive API docs
-- `GET /info` → service info as JSON
+## Deploy to Azure
 
-After changing the UI or API, roll the new version into your live app (keeps the
-same URL):
+```powershell
+# one-time: az login, then from the repo root
+powershell -ExecutionPolicy Bypass -File .\deploy\deploy.ps1
+```
+
+The script builds the image locally, pushes it to Azure Container Registry, and deploys it to Container Apps with a public HTTPS URL and scale-to-zero. To roll out a new version into the running app (keeping the same URL):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\deploy\update-api.ps1
 ```
 
-A separate Streamlit version also exists under `frontend/` as an alternative,
-but the built-in UI above is the simplest — one container, one URL.
+Tear everything down when done:
 
----
-
-## Run locally first (always debug locally before touching the cloud)
-
-**On Windows (or anywhere `make` gives trouble) — use the Python task runner:**
-
-```bash
-python make.py all        # create venv + generate data + train
-python make.py serve      # run the API on :8000
-python make.py test       # (another terminal) smoke-test it
-python make.py help       # list all tasks
-```
-
-`make.py` needs no `make`, no Unix tools, and no special shell — it's pure
-Python and works the same on Windows cmd, WSL, macOS, and Linux. If `python`
-isn't your launcher, use `py make.py all`.
-
-**On WSL / macOS / Linux — the Makefile works too:**
-
-```bash
-make all      # create venv + generate data + train
-make serve    # run the API on :8000
-make test     # in another terminal: smoke-test it
-make help     # see all commands
-```
-
-Or run the steps manually:
-
-```bash
-# 1. install training deps
-pip install -r requirements.txt
-
-# 2. create the dataset
-python data/generate_data.py
-
-# 3. train (writes models/churn_pipeline.joblib + logs to MLflow)
-python -m src.train
-
-# 4. serve
-uvicorn app.main:app --reload --port 8000
-```
-
-Test it:
-
-```bash
-curl localhost:8000/health
-
-curl -X POST localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"CreditScore":600,"Geography":"Germany","Gender":"Female","Age":62,
-       "Tenure":2,"Balance":0,"NumOfProducts":4,"HasCrCard":1,
-       "IsActiveMember":0,"EstimatedSalary":80000}'
-```
-
-Interactive docs (auto-generated by FastAPI): **http://localhost:8000/docs**
-
-Inspect experiments: `mlflow ui --backend-store-uri sqlite:///mlflow.db`
-
----
-
-## Deploy to Azure (free-tier path)
-
-### Phase 0 — guardrails first
-1. Create a free Azure account (use your **university email** — personal Gmail is
-   rejected for some Azure/Power BI signups).
-2. **Before creating anything**, go to *Cost Management → Budgets* and set a budget
-   alert at a low threshold (e.g. $1). This habit is what saves people from surprise bills.
-3. Install the Azure CLI and run `az login`.
-
-### Phase 1 — one-shot deploy
-
-**Windows / PowerShell:**
 ```powershell
-.\deploy\deploy.ps1          # or:  python make.py deploy
-```
-
-**WSL / macOS / Linux:**
-```bash
-bash deploy/deploy.sh        # or:  python make.py deploy
-```
-
-`python make.py deploy` auto-picks the right script for your OS. Either way it
-builds the image **in the cloud** (via `az acr build`, so you don't need Docker
-working locally), then deploys to Container Apps with scale-to-zero and prints
-your public URL at the end.
-
-**Prereqs for deploy:** Azure CLI installed (https://aka.ms/installazurecliwindows)
-and `az login` done first.
-
-### Phase 2 — verify
-```bash
-curl https://<your-app>.azurecontainerapps.io/health
-```
-Open `https://<your-app>.azurecontainerapps.io/docs` and try `/predict` in the browser.
-
-### What each Azure piece is doing
-| Step | Service | Why |
-|------|---------|-----|
-| Build image | Azure Container Registry (ACR) | stores your image; `az acr build` builds it server-side |
-| Run container | Azure Container Apps | serverless container host with scale-to-zero |
-| Public URL | Container Apps ingress | gives you the HTTPS endpoint a general user can hit |
-
----
-
-## Cost & free-tier reality
-
-- **Container Apps**: first **180,000 vCPU-s + 360,000 GiB-s + 2M requests per month
-  are free, every month**. With scale-to-zero a demo stays comfortably inside this.
-- **ACR Basic**: a small monthly fee (~$5). Either delete it after deploying, or let
-  the $200 first-30-days credit absorb it.
-- **Cold starts**: with min-replicas=0, the first request after an idle period spins
-  the container up and loads the model — expect a few seconds of lag on that first hit.
-  Fine for a demo. If you want it always warm, set `--min-replicas 1` (uses more of the
-  free allowance, but a single small replica still fits comfortably).
-
-### Tear down when done
-```bash
 az group delete --name rg-churn-demo --yes --no-wait
 ```
-Deletes everything in one go so nothing keeps billing.
 
----
+## Notable engineering decisions
 
-## Honest notes / where to take it next
+- **Train/serve parity** via a shared feature module — a deliberate anti-skew choice.
+- **Scale-to-zero serving** — near-zero cost when idle, accepting a cold-start latency trade-off.
+- **Self-contained web UI** served by the API — one container, one URL, no separate frontend to host.
+- **Local-build-and-push deployment** — works on Azure for Students, which blocks cloud-side image builds.
+- **Cross-platform tooling** — a Python task runner replaces `make` so the workflow runs on native Windows.
 
-- The model is intentionally modest (ROC-AUC ~0.76 on synthetic data). Swapping in the
-  real Kaggle bank-churn CSV changes nothing downstream — same schema.
-- **Image size vs cold start**: XGBoost pulls in sizeable native libs. If cold starts
-  feel slow, swapping XGBoost for sklearn's `HistGradientBoostingClassifier` yields a
-  smaller image and faster startup, at a small accuracy cost. Good honest tradeoff to mention.
-- **Next MLOps step**: add a GitHub Actions workflow that runs `az acr build` and updates
-  the Container App on push to `main` — that turns this into real CI/CD and is a strong
-  résumé addition.
-- **Frontend**: a tiny Streamlit form in front of `/predict` gives you the
-  "general user can access it" piece you wanted — a page where someone enters customer
-  details and sees the churn probability.
+## Limitations & next steps
 
----
+- Trained on synthetic data; real data would need validation and ongoing monitoring.
+- No automated retraining or drift detection yet — a natural next step.
+- Predictions are not persisted; logging them to a cloud database would add an audit trail and enable drift monitoring.
+- Single region, single small replica — appropriate for a demo, not production scale.
 
-## One-line résumé framing
+## License
 
-> Built and deployed an end-to-end churn MLOps service on Azure — XGBoost pipeline with
-> train/serve feature parity, MLflow tracking, containerized FastAPI inference, deployed
-> to Azure Container Apps with scale-to-zero on the free tier.
+MIT — see [LICENSE](LICENSE).
